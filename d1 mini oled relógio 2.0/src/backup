@@ -1,0 +1,130 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include "SSD1306Wire.h"
+#include <WiFiManager.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+
+SSD1306Wire display(0x3c, SDA, SCL, GEOMETRY_64_48);
+WiFiManager wifi;
+WiFiUDP udp;                     // Create an instance of the WiFiUDP class to send and receive
+
+int timeOffSet = -10800;
+int updateInterval = 6000;
+NTPClient timeClient(udp, "b.ntp.br", timeOffSet, updateInterval);
+
+char ssid[] = "Murilo";
+char pass[] = "94658243";
+int screenWidth = 64;
+int screenHeight = 48;
+int centerX = screenWidth / 2;
+int centerY = screenHeight / 2;
+
+unsigned long lastDisplayTime = millis();
+
+bool separatorActived = true;
+int lastSeconds = 0;
+int lastDay;
+
+String formattedTime;
+String formattedDate;
+
+void setupDisplay();
+void printDisplay(String string);
+void startWiFi();
+void startUDP();
+void startTimeClient();
+String getTime();
+String getDate();
+
+void setup() {
+  Serial.begin(9600);
+  setupDisplay();
+  startWiFi();
+  startUDP();
+  timeClient.begin();
+}
+
+void loop() {
+  timeClient.update();
+
+  formattedTime = timeClient.getFormattedTime();
+  Serial.printf("\rFormatted Time: %s", formattedTime.c_str());
+  
+  display.clear();
+  String time = getTime();
+  String date = getDate();
+
+  display.drawStringMaxWidth(centerX, 0, screenWidth, time);
+  display.drawStringMaxWidth(centerX, centerY, screenWidth, date);
+}
+
+void setupDisplay() {
+  display.init();
+  display.setBrightness(128);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+}
+
+void startWiFi() {
+  printDisplay("Conectando wifi...");
+  wifi.connectStation(ssid, pass);
+  printDisplay("Conectado à rede " + String(ssid) + "!");
+  lastDisplayTime = millis();
+}
+
+void startUDP() {
+  Serial.println("\nStarting UDP");
+  udp.begin(123);                          // Start listening for UDP messages on port 123
+  Serial.print("Local port:\t");
+  Serial.println(udp.localPort());
+  Serial.println();
+}
+
+void printDisplay(String string) {
+  display.clear();
+  display.drawStringMaxWidth(centerX, 0, screenWidth, string);
+  display.display();
+}
+
+String getTime() {
+  int hour = timeClient.getHours();
+  int minute = timeClient.getMinutes();
+  int seconds = timeClient.getSeconds();
+  String string;
+
+  if (lastSeconds != seconds) {
+    lastSeconds = seconds;
+    separatorActived = !separatorActived;
+  }
+
+  if(separatorActived) string = String(hour) + " " + String(minute);
+  else string = String(hour) + ":" + String(minute);
+
+  return string;
+  // display.setFont(ArialMT_Plain_24);
+  // display.drawStringMaxWidth(centerX, 0, screenWidth, string);
+  // display.display();
+}
+
+String getDate() {
+  unsigned long epochTime = timeClient.getEpochTime();
+  struct tm *ptm = gmtime ((time_t *)&epochTime); 
+
+  int day = ptm->tm_mday;
+  if (lastDay == day) return formattedDate;
+  lastDay = day;
+
+
+  int month = ptm->tm_mon + 1;
+  int year = ptm->tm_year + 1900;
+
+  String string = String(day) + "/" + String(month) + "/" + String(year);
+  return string;
+  // if (formattedDate == string) return;
+
+  // formattedDate = string;
+  
+  // display.setFont(ArialMT_Plain_10);
+  // display.drawStringMaxWidth(centerX, centerY, screenWidth, formattedDate);
+  // display.display();
+}

@@ -1,0 +1,1 @@
+curl -v -F "image=@.pio/build/d1_mini/firmware.bin" http://ventilador.local:81/ota/update
